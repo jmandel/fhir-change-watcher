@@ -12,14 +12,19 @@ async function history({ baseUrl, since, more }: historyArgs) {
   if (since) {
     url.searchParams.set("_since", new Date(since).toISOString());
   }
-  const res = await fetch(url);
-  const json = await res.json();
-  return [
-    json.entry || [],
-    (json.link || []).filter(
-      (l: { relation: string }) => l.relation == "next"
-    )[0]?.url || null,
-  ];
+  try {
+    const res = await fetch(url);
+    const json = await res.json();
+    return [
+      json.entry || [],
+      (json.link || []).filter(
+        (l: { relation: string }) => l.relation == "next"
+      )[0]?.url || null,
+    ];
+  } catch (e) {
+    console.log(e);
+    return [[], null];
+  }
 }
 async function entryHistory({ baseUrl, entry }: historyArgs) {
   const entryPath = entry.request.url.split("/");
@@ -92,7 +97,7 @@ export default async function* trackHistory(
       newestEntryCache.set(e.request.url, newestEntryTime)
     );
 
-    console.log("Yielding", newEntries.length, "entires", new Date());
+    console.log("Yielding", newEntries.length, "entries", new Date());
     for (const e of zipped.toReversed()) {
       yield e;
     }
