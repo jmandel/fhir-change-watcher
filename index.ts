@@ -51,7 +51,8 @@ export default async function* trackHistory(
   pollingDelay = 10000,
   shortestDelay = 5000
 ) {
-  let lastSweepResourceTime = startAt || new Date(Date.now() - 100 * pollingDelay).getTime();
+  let lastSweepResourceTime =
+    startAt || new Date(Date.now() - 100 * pollingDelay).getTime();
   const newestEntryCache = new Map();
   while (true) {
     let allEntries: any[] = [];
@@ -68,7 +69,7 @@ export default async function* trackHistory(
       }
     } while (entries.length);
 
-    const lastUpdated = (r:any) => new Date(r.meta.lastUpdated).getTime();
+    const lastUpdated = (r: any) => new Date(r.meta.lastUpdated).getTime();
     const newEntries = allEntries.filter(
       (e) => !newestEntryCache.has(e.request.url)
     );
