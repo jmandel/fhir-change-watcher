@@ -12,7 +12,6 @@ async function history({ baseUrl, since, more }: historyArgs) {
   if (since) {
     url.searchParams.set("_since", new Date(since).toISOString());
   }
-
   const res = await fetch(url);
   const json = await res.json();
   return [
@@ -46,18 +45,16 @@ async function entryHistory({ baseUrl, entry }: historyArgs) {
   return delta;
 }
 
-async function* trackHistory(
+export default async function* trackHistory(
   baseUrl = "https://hapi.fhir.org/baseR4",
   startAt = null,
   pollingDelay = 10000,
   shortestDelay = 5000
 ) {
-  let lastSweepResourceTime =
-    startAt || new Date(Date.now() - 100 * pollingDelay).getTime();
+  let lastSweepResourceTime = startAt || new Date(Date.now() - 100 * pollingDelay).getTime();
   const newestEntryCache = new Map();
   while (true) {
     let allEntries: any[] = [];
-    let newestEntryTime: null | number = null;
     let [entries, more] = await history({
       baseUrl,
       since: lastSweepResourceTime,
@@ -71,28 +68,26 @@ async function* trackHistory(
       }
     } while (entries.length);
 
-    const lastUpdated = (r) => new Date(r.meta.lastUpdated).getTime();
+    const lastUpdated = (r:any) => new Date(r.meta.lastUpdated).getTime();
     const newEntries = allEntries.filter(
       (e) => !newestEntryCache.has(e.request.url)
     );
 
-    newestEntryTime = Math.max(
+    const newestEntryTime = Math.max(
       ...newEntries
         .map((e) =>
           e.resource ? lastUpdated(e.resource) : lastSweepResourceTime
         )
         .concat(lastSweepResourceTime)
     );
+    lastSweepResourceTime = newestEntryTime!;
 
-    let zipped = await Promise.all(
+    const zipped = await Promise.all(
       newEntries.map((e) => entryHistory({ baseUrl, entry: e }))
     );
 
-    if (newestEntryTime > lastSweepResourceTime) {
-      console.log("Progress", lastSweepResourceTime, newestEntryTime);
-      newestEntryCache.clear();
-    }
-    newEntries.forEach((e) =>
+    newestEntryCache.clear();
+    allEntries.forEach((e) =>
       newestEntryCache.set(e.request.url, newestEntryTime)
     );
 
@@ -100,40 +95,6 @@ async function* trackHistory(
     for (const e of zipped.toReversed()) {
       yield e;
     }
-    lastSweepResourceTime = newestEntryTime!;
     await new Promise((resolve) => setTimeout(resolve, pollingDelay));
   }
 }
-// for await (const e of trackHistory()) {
-//   console.log(`${e.current?.resourceType}/${e.current?.id}`);
-//   console.log(e);
-// }
-
-
-import { Application, Router, ServerSentEvent } from "https://deno.land/x/oak@v11.1.0/mod.ts";
-
-// Import trackHistory function from existing code
-
-const app = new Application();
-const router = new Router();
-
-const sockets: any[] = []
-const events = trackHistory();
-router.get("/", (ctx) => {
-  const target = ctx.sendEvents();
-  sockets.push(target);
-  target.dispatchMessage({"log": "Beginning SSE"});
-});
-
-app.use(router.routes());
-console.log("Starting")
-app.listen({ port: 8000 });
-
-for await (const entry of trackHistory()) {
-    console.log("Entry", entry);
-    for (const target of sockets) {
-        console.log("Delivering", target.closed)
-        if (!target.closed) target.dispatchMessage(entry);
-    }
-}
-
